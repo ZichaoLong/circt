@@ -81,14 +81,78 @@ static void getBackwardSliceSimple(Operation *rootOp,
   backwardSlice.remove(rootOp);
 }
 
+// Reimplemented and simplified from SliceAnalysis to use a worklist rather than
+// recursion and not consider nested regions.
+static void getForwardSliceSimple(Operation *rootOp,
+                                  SetVector<Operation *> &forwardSlice) {
+  SmallVector<Operation *> worklist;
+  worklist.push_back(rootOp);
+
+  while (!worklist.empty()) {
+    Operation *op = worklist.pop_back_val();
+    forwardSlice.insert(op);
+    for (auto *user : op->getUsers())
+      worklist.push_back(user);
+  }
+}
+
+// Used to check if an operation is a "dataflow" op. This is pretty much
+// everything that isn't indirecting through wires, regs, or instances.
+static bool isDataflowOp(Operation *testOp) {
+  return !isa<sv::ReadInOutOp>(testOp) && !isa<hw::InstanceOp>(testOp) &&
+         !isa<sv::PAssignOp>(testOp) && !isa<sv::BPAssignOp>(testOp);
+}
+
 // Compute the dataflow for a set of ops.
 static void dataflowSlice(SetVector<Operation *> &ops,
                           SetVector<Operation *> &results) {
-  for (auto op : ops) {
-    getBackwardSliceSimple(op, results, [](Operation *testOp) -> bool {
-      return !isa<sv::ReadInOutOp>(testOp) && !isa<hw::InstanceOp>(testOp) &&
-             !isa<sv::PAssignOp>(testOp) && !isa<sv::BPAssignOp>(testOp);
+  for (auto op : ops)
+    getBackwardSliceSimple(op, results, isDataflowOp);
+}
+
+static bool resultsOnlyUsedInSlice(Operation *op,
+                                   const SetVector<Operation *> &slice) {
+  return llvm::all_of(op->getUsers(), [slice](Operation *user) {
+    return slice.contains(user);
+  });
+}
+
+static void nonDataFlowSlice(SetVector<Operation *> &slice) {
+  // Compute set of wire reads that only feed into the slice, and add them to
+  // the slice.
+  SmallVector<ReadInOutOp> reads;
+  for (auto *op : slice)
+    for (auto operand : op->getOperands())
+      if (auto readInOut =
+              dyn_cast_or_null<sv::ReadInOutOp>(operand.getDefiningOp()))
+        if (resultsOnlyUsedInSlice(readInOut, slice))
+          reads.push_back(readInOut);
+
+  // Traverse the wires being read from and gather their assigns.
+  SetVector<Operation *> assigns;
+  for (auto read : reads) {
+    // Add the read to the dataflow slice.
+    slice.insert(read);
+
+    // Track the assign(s) to the wire being read.
+    Operation *wire = read.getInput().getDefiningOp();
+    for (auto *user : wire->getUsers())
+      if (isa<sv::AssignOp>(user))
+        assigns.insert(user);
+  }
+
+  // Traverse the assigns, adding to the slice.
+  for (auto *op : assigns) {
+    // Take backward dataflow slices from the assigns, which will include the
+    // wire and the logic assigned to the wire.
+    getBackwardSliceSimple(op, slice, [&slice](Operation *testOp) {
+      return isDataflowOp(testOp) || isa<sv::AssignOp>(testOp) ||
+             (isa<hw::InstanceOp>(testOp) &&
+              resultsOnlyUsedInSlice(testOp, slice));
     });
+
+    // Add the assign itself, which the above function explicitly doesn't do.
+    slice.insert(op);
   }
 }
 
@@ -110,6 +174,9 @@ static SetVector<Operation *> computeCloneSet(SetVector<Operation *> &roots) {
   SetVector<Operation *> results;
   // Get Dataflow for roots
   dataflowSlice(roots, results);
+
+  // Get limited forms of non-Dataflow into Dataflow slice.
+  nonDataFlowSlice(results);
 
   // Get Blocks
   SetVector<Operation *> blocks;
@@ -283,6 +350,8 @@ private:
 
     // Find the data-flow and structural ops to clone.  Result includes roots.
     auto opsToClone = computeCloneSet(roots);
+    numOpsExtracted += opsToClone.size();
+
     // Find the dataflow into the clone set
     SetVector<Value> inputs;
     for (auto op : opsToClone)
@@ -291,6 +360,33 @@ private:
         if (!opsToClone.count(argOp))
           inputs.insert(arg);
       }
+
+    // Mark the roots and instances for removal.
+    SmallPtrSet<Operation *, 16> opsToErase;
+    for (auto *op : opsToClone) {
+      if (isa<hw::InstanceOp>(op) && op->getNumResults() > 0) {
+        // If the an instance has results, see if its results' forward slice is
+        // completely contained in the backward slice. This allows erasing
+        // instances that only exist for the test code. Other ops with results
+        // only used in the backward slice can be canonicalized away later if
+        // they remain unused.
+        SetVector<Operation *> forwardSlice;
+        getForwardSliceSimple(op, forwardSlice);
+
+        // If the instance is a candidate for erasure, add it and the entire
+        // forward slice to the set of ops to erase. Normally, we could let most
+        // of the forward slice be canonicalized away, but we need to remove
+        // them from the IR proactively so it is valid at the end of the pass.
+        bool shouldEraseInstance = llvm::all_of(
+            forwardSlice, [&](auto *op) { return opsToClone.contains(op); });
+        if (shouldEraseInstance) {
+          opsToErase.insert(op);
+          for (auto *op : forwardSlice)
+            opsToErase.insert(op);
+        }
+      }
+    }
+    numOpsErased += opsToErase.size();
 
     // Make a module to contain the clone set, with arguments being the cut
     BlockAndValueMapping cutMap;
@@ -301,6 +397,15 @@ private:
     // erase old operations of interest
     for (auto op : roots)
       op->erase();
+
+    // Erase any instance ops whose results' forward slice was only used in the
+    // set of extracted ops.
+    for (auto *op : opsToErase) {
+      op->dropAllUses();
+      op->erase();
+    }
+
+    return;
   }
 };
 
