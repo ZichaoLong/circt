@@ -109,12 +109,13 @@ static bool valueDefinedBeforeOp(Value value, Operation *op) {
          (!valueOp || valueOp->isBeforeInBlock(op));
 }
 
-// Add mux pragmas to array in the following form.
-//
-// wire GEN;
-// /* synopsys infer_mux_override */
-// assign GEN = memory[addr] /* cadence map_to_mux */;
-//
+// Construct array indexing annotated with mux pragmas in the following
+// form:
+// ```
+//   wire GEN;
+//   /* synopsys infer_mux_override */
+//   assign GEN = memory[addr] /* cadence map_to_mux */;
+// ```
 static Value getMemoryReadWithMuxPragma(ImplicitLocOpBuilder &b, Value memory,
                                         Value addr) {
   auto slot =
