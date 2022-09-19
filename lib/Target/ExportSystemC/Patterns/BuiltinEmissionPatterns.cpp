@@ -92,16 +92,8 @@ struct FunctionTypeEmitter : public TypeEmissionPattern<FunctionType> {
       p.emitType(type.getResult(0));
 
     p << "(";
-
-    bool first = true;
-    for (Type ty : type.getInputs()) {
-      if (!first)
-        p << ", ";
-
-      p.emitType(ty);
-      first = false;
-    }
-
+    llvm::interleaveComma(type.getInputs(), p,
+                          [&](auto ty) { p.emitType(ty); });
     p << ")>";
   }
 };

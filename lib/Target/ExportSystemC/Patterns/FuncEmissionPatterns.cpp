@@ -154,13 +154,9 @@ class CallEmitter : public OpEmissionPattern<CallOp> {
 private:
   void printCall(CallOp op, EmissionPrinter &p) {
     p << op.getCallee() << "(";
-    bool first = true;
-    for (Value arg : op.getOperands()) {
-      if (!first)
-        p << ", ";
+    llvm::interleaveComma(op.getOperands(), p, [&](auto arg) {
       p.getInlinable(arg).emitWithParensOnLowerPrecedence(Precedence::COMMA);
-      first = false;
-    }
+    });
     p << ")";
   }
 };
@@ -204,13 +200,9 @@ private:
     p.getInlinable(op.getCallee())
         .emitWithParensOnLowerPrecedence(Precedence::FUNCTION_CALL);
     p << "(";
-    bool first = true;
-    for (Value arg : op.getCalleeOperands()) {
-      if (!first)
-        p << ", ";
+    llvm::interleaveComma(op.getCalleeOperands(), p, [&](auto arg) {
       p.getInlinable(arg).emitWithParensOnLowerPrecedence(Precedence::COMMA);
-      first = false;
-    }
+    });
     p << ")";
   }
 };
