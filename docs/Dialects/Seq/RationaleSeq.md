@@ -221,11 +221,9 @@ of a memory which eventually map to some form on-chip resources - whether being
 FPGA or ASIC-based.
 The abstraction aims to abstract away the physical implementation details of the
 memory, and instead focus on the external interface and access semantics of the
-memory.
-
-Providing a notion of an abstraction, high-level memory, facilitates analysis
-and transformation (e.g. memory merging, read/write conflicts, merging, etc.)
-and may serve as a target for other high-level abstractions.
+memory. this, in turn, facilitates analysis and transformation (e.g. memory
+merging, read/write conflicts, merging, etc.) and may serve as a target for
+other high-level abstractions.
 
 The high-level memory abstraction is split into two parts:
 * Memory *allocation* is defined by the `seq.hlmem` operation. This operation defines
