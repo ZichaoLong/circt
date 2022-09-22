@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CIRCT_DIALECT_SEQ_TYPES_H
-#define CIRCT_DIALECT_SEQ_TYPES_H
+#ifndef CIRCT_DIALECT_SEQ_SEQTYPES_H
+#define CIRCT_DIALECT_SEQ_SEQTYPES_H
 
 #include "circt/Dialect/Seq/SeqDialect.h"
 
@@ -23,4 +23,4 @@
 #define GET_TYPEDEF_CLASSES
 #include "circt/Dialect/Seq/SeqTypes.h.inc"
 
-#endif // CIRCT_DIALECT_SEQ_TYPES_H
+#endif // CIRCT_DIALECT_SEQ_SEQTYPES_H
