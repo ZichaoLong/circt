@@ -292,14 +292,19 @@ only provide rudimentary read- and write ops.
 Example future ports could be:
 
 * **Assymetric port widths**
+  Specified as a new `seq.asym_read` port which defines a read data width
+  of some fraction of the native data size.
   ```mlir
   %rdata = seq.asym_read %rp[%addr] : !seq.read_port<4xi32> -> i16
   ```
-  which would then put different typing requirementst on the `%addr` signal
-
+  which would then put different typing requirements on the `%addr` signal.
+  Given the halfing of the word size, the expected address type would then
+  be `ceil(log2(4)) << 1 = i3`
 * **Byte-enable write ports**
+  Specified as a new `seq.write_be` port with an additional byte enable
+  signal.
   ```mlir
-  %wdata = seq.write_be %wp[%addr] %wdata, %be : i32, i4 -> !seq.write_eport<4xi32>
+  %wdata = seq.write_be %wp[%addr] %wdata, %be : i32, i4 -> !seq.write_port<4xi32>
   ```
 * **Debug ports**
 Could be specified as either an additional read port, or (if further

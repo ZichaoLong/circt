@@ -11,7 +11,7 @@
 
 add_circt_dialect(Seq seq)
 add_circt_dialect_doc(Seq seq)
- 
+
 set(LLVM_TARGET_DEFINITIONS SeqPasses.td)
 mlir_tablegen(SeqPasses.h.inc -gen-pass-decls)
 add_public_tablegen_target(CIRCTSeqTransformsIncGen)
