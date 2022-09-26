@@ -164,7 +164,10 @@ def StructCreateOp : HWOp<"struct_create", [NoSideEffect]> {
 }
 
 // Extract the value of a field of a structure.
-def StructExtractOp : HWOp<"struct_extract", [NoSideEffect]> {
+def StructExtractOp : HWOp<"struct_extract",
+    [NoSideEffect,
+    DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>
+  ]> {
   let summary = "Extract a named field from a struct.";
   let description = [{
     ```
@@ -204,7 +207,9 @@ def StructInjectOp : HWOp<"struct_inject", [NoSideEffect,
   let hasCanonicalizeMethod = 1;
 }
 
-def StructExplodeOp : HWOp<"struct_explode", [NoSideEffect]> {
+def StructExplodeOp : HWOp<"struct_explode", [NoSideEffect,
+    DeclareOpInterfaceMethods<OpAsmOpInterface, ["getAsmResultNames"]>
+  ]> {
   let summary = "Expand a struct into its constituent parts.";
   let description = [{
     ```
